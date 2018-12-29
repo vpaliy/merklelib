@@ -1,20 +1,25 @@
 # merkle-trees
 
 
-## Diagrams
+### Merkle Tree Diagram
 
 <img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/general.jpg"  />
+
+
+### Merkle Audit Proof Diagram
+
+<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/proof.jpg"  />
 
 
 ## Usage
 
 ```python
  from merkle import MerkleTree, beautify
- 
- 
+
+
  transactions = get_transactions(user) # random data
  tree = MerkleTree(transactions)
- 
+
  beautify(tree) # print the tree in the terminal
 ```
 
@@ -43,12 +48,12 @@ You can also export the output above as an image. This is how you'd do it:
 
 ```python
  from merkle import MerkleTree, export
- 
- 
+
+
  transactions = get_transactions(user) # random data
  tree = MerkleTree(transactions)
- 
- export(tree, filename='transactions', ext='jpg') 
+
+ export(tree, filename='transactions', ext='jpg')
 ```
 
 Default extension is always `.png`. You can also specify an absolute path.

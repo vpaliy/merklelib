@@ -4,9 +4,10 @@ import collections
 import abc
 import six
 import functools
+import io
 
-from anytree import Node, RenderTree
-from anytree.exporter import DotExporter
+from anytree import AnyNode, RenderTree
+from anytree.exporter import DotExporter, JsonExporter
 
 LEFT, RIGHT, ROOT = tuple(range(3))
 
@@ -38,21 +39,25 @@ def _get_printable_tree(tree):
   root = tree
   if isinstance(tree, MerkleTree):
     root = tree.root
-  parent = Node(root.hash)
+  parent = AnyNode(name=root.hash)
   queue = [(root, parent)]
   while len(queue) > 0:
     node, par = queue.pop()
     left, right = node.left, node.right
     if left is not None:
-      queue.append((left, Node(left.hash, parent=par)))
+      queue.append((left, AnyNode(name=left.hash, parent=par)))
     if right is not None:
-      queue.append((right, Node(right.hash, parent=par)))
+      queue.append((right, AnyNode(name=right.hash, parent=par)))
   return parent
 
 
-def export(tree, filename, ext='png'):
+def export(tree, filename, ext='json', **kwargs):
   parent = _get_printable_tree(tree)
-  DotExporter(parent).to_picture(f'{filename}.{ext}')
+  if ext == 'json':
+    with io.open(f'{filename}.json', mode='w+') as fp:
+      JsonExporter(**kwargs).write(parent, fp)
+  else:
+    DotExporter(parent, **kwargs).to_picture(f'{filename}.{ext}')
 
 
 def beautify(tree):
