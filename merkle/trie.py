@@ -1,5 +1,12 @@
 # -*- coding: future_fstrings -*-
 import hashlib
+import collections
+import abc
+import six
+import functools
+
+
+LEFT, RIGHT, ROOT = tuple(range(3))
 
 
 def _default_hash(x):
@@ -13,8 +20,46 @@ def _pairwise(iterable):
   return zip(a, a)
 
 
-class MerkleNode(object):
-  __slots__ = ('hash', 'left', 'right', 'parent')
+def _get_hash(obj):
+  if isinstance(obj, _BaseNode):
+    return str(obj.hash)
+  elif isinstance(obj, str):
+    return obj
+  raise TypeError('Invalid type')
+
+
+def _concat(*nodes):
+  def __concat(x, y):
+    sum = lambda x, y: _get_hash(x) + _get_hash(y)
+    if isinstance(x, _BaseNode):
+      if x.type == LEFT:
+        return sum(x, y)
+      elif x.type == RIGHT:
+        return sum(y, x)
+    if isinstance(y, _BaseNode):
+      if y.type == LEFT:
+        return sum(y, x)
+    return sum(x, y)
+  return functools.reduce(__concat, nodes)
+
+
+@six.add_metaclass(abc.ABCMeta)
+class _BaseNode(object):
+  __slots__ = ('hash', 'type',)
+
+  def __eq__(self, other):
+    return all([
+      isinstance(other, _BaseNode),
+      self.hash == other.hash
+    ])
+
+  def __repr__(self):
+    name = type(self).__name__
+    return f'<{name} {self.hash}>'
+
+
+class MerkleNode(_BaseNode):
+  __slots__ = ('left', 'right', 'parent',)
 
   def __init__(self, hash, left=None, right=None, parent=None):
     if not hash:
@@ -26,20 +71,7 @@ class MerkleNode(object):
       left.parent = self
     if right is not None:
       right.parent = self
-
-  def __eq__(self, other):
-    return all([
-      isinstance(other, MerkleNode),
-      self.hash == other.hash
-    ])
-
-  def __hash__(self):
-    return self.hash
-
-  def __add__(self, other):
-    if not isinstance(other, MerkleNode):
-      raise TypeError('Invalid argument')
-    return str(self.hash) + str(other.hash)
+    self.parent = parent
 
   def get_sibiling(self):
     parent = self.parent
@@ -51,8 +83,18 @@ class MerkleNode(object):
       return parent.left
     return None
 
-  def __repr__(self):
-    return f'<MerkleNode {self.hash}>'
+  @property
+  def type(self):
+    parent = self.parent
+    if parent is None:
+      return ROOT
+    return LEFT if (parent.left is self) else RIGHT
+
+
+class AuditProof(_BaseNode):
+  def __init__(self, hash, type):
+    self.hash = hash
+    self.type = type
 
 
 class MerkleTree(object):
@@ -60,9 +102,6 @@ class MerkleTree(object):
     if not leaves:
       raise TypeError('Invalid leaves param')
     self._init_hash_algo(hash_algo)
-    self.leaves = leaves
-    self.mapping = {}
-    self.root = None
     self._build_tree(leaves)
 
   def _init_hash_algo(self, hash_algo):
@@ -73,26 +112,34 @@ class MerkleTree(object):
     self.hash_algo = hash_algo
 
   def _build_tree(self, leaves):
+    self.mapping = self.root = None
     hash = self.hash_algo
     nodes = [MerkleNode(hash(leaf)) for leaf in leaves]
     leaves = list(nodes)
     while len(nodes) > 1:
       if (len(nodes) % 2) != 0:
         nodes.append(nodes[-1])
-      nodes = [MerkleNode(hash(l+r), l, r) for l, r in _pairwise(nodes)]
+      nodes = [MerkleNode(hash(_concat(l, r)), l, r) for l, r in _pairwise(nodes)]
       leaves.extend(nodes)
-    self.mapping = { node.hash:node for node in leaves }
-    self.root = nodes[0]
+    if len(leaves) > 0:
+      self.mapping = { node.hash:node for node in leaves }
+      self.root = nodes[0]
 
   def get_proof(self, leaf):
     mapping, hash = self.mapping, self.hash_algo
     target = mapping.get(leaf, mapping.get(hash(leaf)))
     if not isinstance(target, MerkleNode):
-      raise TypeError('Invalid leaf or hash')
+      raise TypeError('Invalid leaf')
     root, proof = self.root, []
-    proof.append(target.hash)
     while target is not root:
       sibiling = target.get_sibiling()
-      proof.append(sibiling.hash)
+      audit_prf = AuditProof(sibiling.hash, sibiling.type)
+      proof.append(audit_prf)
       target = target.parent
     return proof
+
+  def verify(self, target, proof):
+    hash = self.hash_algo
+    proof = [hash(target)] + proof
+    root = functools.reduce(lambda x,y: hash(_concat(x, y)), proof)
+    return root == self.root.hash
