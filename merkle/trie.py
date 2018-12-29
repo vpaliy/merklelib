@@ -5,6 +5,8 @@ import abc
 import six
 import functools
 
+from anytree import Node, RenderTree
+from anytree.exporter import DotExporter
 
 LEFT, RIGHT, ROOT = tuple(range(3))
 
@@ -26,6 +28,37 @@ def _get_hash(obj):
   elif isinstance(obj, str):
     return obj
   raise TypeError('Invalid type')
+
+
+def _get_printable_tree(tree):
+  if not isinstance(tree, (MerkleTree, MerkleNode)):
+    raise TypeError(
+      f'Expected MerkleTree or MerkleNode, got {type(tree)}'
+    )
+  root = tree
+  if isinstance(tree, MerkleTree):
+    root = tree.root
+  parent = Node(root.hash)
+  queue = [(root, parent)]
+  while len(queue) > 0:
+    node, par = queue.pop()
+    left, right = node.left, node.right
+    if left is not None:
+      queue.append((left, Node(left.hash, parent=par)))
+    if right is not None:
+      queue.append((right, Node(right.hash, parent=par)))
+  return parent
+
+
+def export(tree, filename, ext='png'):
+  parent = _get_printable_tree(tree)
+  DotExporter(parent).to_picture(f'{filename}.{ext}')
+
+
+def beautify(tree):
+  parent = _get_printable_tree(tree)
+  for pre, fill, node in RenderTree(parent):
+    print(f'{pre}{node.name}')
 
 
 def _concat(*nodes):
