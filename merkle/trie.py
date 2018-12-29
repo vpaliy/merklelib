@@ -1,4 +1,7 @@
 # -*- coding: future_fstrings -*-
+from __future__ import print_function
+from __future__ import with_statement
+
 import hashlib
 import collections
 import abc
@@ -54,10 +57,15 @@ def _get_printable_tree(tree):
 def export(tree, filename, ext='json', **kwargs):
   parent = _get_printable_tree(tree)
   if ext == 'json':
-    with io.open(f'{filename}.json', mode='w+') as fp:
+    with io.open(f'{filename}.json', mode='w+', encoding='utf-8') as fp:
       JsonExporter(**kwargs).write(parent, fp)
   else:
     DotExporter(parent, **kwargs).to_picture(f'{filename}.{ext}')
+
+
+def jsonify(tree, **kwargs):
+  parent = _get_printable_tree(tree)
+  return JsonExporter(**kwargs).export(parent)
 
 
 def beautify(tree):

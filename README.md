@@ -1,9 +1,12 @@
 # merkle-trees
 
+<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/background.jpg"  />
+
+# Concept
 
 ### Merkle Tree Diagram
 
-<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/general.jpg"  />
+<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/merkle.jpg"  />
 
 
 ### Merkle Audit Proof Diagram
@@ -43,7 +46,7 @@ Output:
         └── 26325a546fbbb0238cb2fb3e9266b81084f74de0c37dc9cf67fd1f49b3b1c6c8
 ```
 
-You can also export the output above as an image. This is how you'd do it:
+You can also export the output above as an image or a JSON file. This is how you'd do it:
 
 
 ```python
@@ -56,9 +59,9 @@ You can also export the output above as an image. This is how you'd do it:
  export(tree, filename='transactions', ext='jpg')
 ```
 
-Default extension is always `.png`. You can also specify an absolute path.
+Default extension is always `.json.` You can also specify an absolute path.
 
-However, in order to be able to use the `export` function, you may need to install `graphviz` on your machine.
+However, in order to be able to use the `export` function with images, you may need to install `graphviz` on your machine.
 Here is how you can do that for Mac and Ubuntu:
 
 ### Mac
