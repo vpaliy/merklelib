@@ -1,10 +1,24 @@
 # merkle-trees
 
 
-<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/general.jpg" />
+## Diagrams
+
+<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/general.jpg"  />
 
 
-## Content
+## Usage
+
+```python
+ from merkle import MerkleTree, beautify
+ 
+ 
+ transactions = get_transactions(user) # random data
+ tree = MerkleTree(transactions)
+ 
+ beautify(tree) # print the tree in the terminal
+```
+
+Output:
 
 ```
 571c427627aa472d9ddf4bf537900d9aad176f40a6e1c87b894516319cb36488
@@ -24,7 +38,22 @@
         └── 26325a546fbbb0238cb2fb3e9266b81084f74de0c37dc9cf67fd1f49b3b1c6c8
 ```
 
-In order to be able to use the `export` function, you may need to install `graphviz` on your machine.
+You can also export the output above as an image. This is how you'd do it:
+
+
+```python
+ from merkle import MerkleTree, export
+ 
+ 
+ transactions = get_transactions(user) # random data
+ tree = MerkleTree(transactions)
+ 
+ export(tree, filename='transactions', ext='jpg') 
+```
+
+Default extension is always `.png`. You can also specify an absolute path.
+
+However, in order to be able to use the `export` function, you may need to install `graphviz` on your machine.
 Here is how you can do that for Mac and Ubuntu:
 
 ### Mac
@@ -35,3 +64,29 @@ Here is how you can do that for Mac and Ubuntu:
 ### Ubuntu
 
 `sudo apt-get install graphviz`
+
+
+# License
+```
+MIT License
+
+Copyright (c) 2018 Vasyl Paliy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
