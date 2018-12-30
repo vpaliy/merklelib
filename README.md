@@ -1,9 +1,5 @@
 # merkle-trees
 
-<img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/background.jpg"  />
-
-# Concept
-
 ### Merkle Tree Diagram
 
 <img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/merkle.jpg"  />
