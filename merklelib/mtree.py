@@ -9,11 +9,14 @@ import six
 import functools
 import io
 import math
+import time
 
 from anytree import AnyNode, RenderTree
 from anytree.exporter import DotExporter, JsonExporter
 
 LEFT, RIGHT, UNKNOWN = tuple(range(3))
+
+_empty = object()
 
 
 def _default_hash(x):
@@ -36,7 +39,10 @@ def _get_hash(obj):
     return str(obj.hash)
   elif isinstance(obj, str):
     return obj
-  raise TypeError('Object must be a an instance of _BaseNode or str')
+  raise TypeError(
+    'Object must be a an instance of _BaseNode or str'
+    f' got {type(obj)}'
+  )
 
 
 def _get_printable_tree(tree):
@@ -54,10 +60,9 @@ def _get_printable_tree(tree):
     left, right = node.left, node.right
     if left is not None:
       queue.append((left, AnyNode(name=left.hash, parent=par)))
-    if right is not None:
+    if (right is not None) and (right is not _empty):
       any_node = AnyNode(name=right.hash, parent=par)
-      if not isinstance(right, _EmptyNode):
-        queue.append((right, any_node))
+      queue.append((right, any_node))
   return parent
 
 
@@ -83,8 +88,8 @@ def beautify(tree):
 
 def _concat(hash, *nodes):
   def __concat(x, y):
-    if isinstance(x, _EmptyNode) or isinstance(y, _EmptyNode):
-      return x.hash
+    if (x is _empty) or (y is _empty):
+      return x.hash if y is _empty else y.hash
     sum = lambda x, y: hash(_get_hash(x) + _get_hash(y))
     if isinstance(x, _BaseNode):
       if x.type == LEFT:
@@ -177,9 +182,9 @@ class MerkleNode(_BaseNode):
     self.hash = hash
     self.left = left
     self.right = right
-    if left is not None:
+    if (left is not None) and (left is not _empty):
       left.parent = self
-    if right is not None:
+    if (right is not None) and (right is not _empty):
       right.parent = self
     self.parent = parent
 
@@ -211,37 +216,6 @@ class AuditProof(_BaseNode):
     self.type = type
 
 
-class _EmptyNode(_BaseNode):
-  __slots__ = ('parent', )
-
-  def __init__(self, hash, parent=None):
-    self.hash = hash
-    self.parent = parent
-
-  def get_sibiling(self):
-    parent = self.parent
-    if parent is None:
-      return None
-    if parent.left is self:
-      return parent.right
-    elif parent.right is self:
-      return parent.left
-    return None
-
-  @property
-  def type(self):
-    parent = self.parent
-    if parent is None:
-      return UNKNOWN
-    return LEFT if (parent.left is self) else RIGHT
-
-  @classmethod
-  def create(cls, node):
-    if not isinstance(node, MerkleNode):
-      raise TypeError(f'Expected MerkleNode, got {type(node)}')
-    return cls(node.hash, node.parent)
-
-
 class MerkleTree(object):
   def __init__(self, leaves, hash_algo=None):
     if not leaves:
@@ -263,25 +237,26 @@ class MerkleTree(object):
     leaves = list(nodes)
     while len(nodes) > 1:
       if (len(nodes) % 2) != 0:
-        nodes.append(_EmptyNode.create(nodes[-1]))
+        nodes.append(_empty)
       nodes = [MerkleNode.combine(l, r, hash) for l, r in _pairwise(nodes)]
     if len(leaves) > 0:
       mapping = collections.OrderedDict()
       for leaf in leaves:
         mapping[leaf.hash] = leaf
       self._mapping = mapping
-      self._root = nodes[0]
+      self._set_root(nodes[0])
 
   def get_proof(self, leaf):
     mapping, hash = self._mapping, self._hash_algo
     target = mapping.get(leaf, mapping.get(hash(leaf)))
     if not isinstance(target, MerkleNode):
-      raise KeyError('Invalid leaf value.')
+      return []
     root, proof = self._root, []
     while target is not root:
       sibiling = target.get_sibiling()
-      audit_prf = AuditProof(sibiling.hash, sibiling.type)
-      proof.append(audit_prf)
+      if sibiling is not _empty:
+        audit_prf = AuditProof(sibiling.hash, sibiling.type)
+        proof.append(audit_prf)
       target = target.parent
     return proof
 
@@ -291,8 +266,6 @@ class MerkleTree(object):
     while node is not root:
       parent = node.parent
       sibiling = node.get_sibiling()
-      if isinstance(sibiling, _EmptyNode):
-        sibiling.hash = node.hash
       parent.hash = _concat(hash, node, sibiling)
       node = parent
 
@@ -312,24 +285,59 @@ class MerkleTree(object):
     leaf.hash = new
     self._rehash(leaf)
 
-  def add(self, item):
-    mapping, hash, leaves = (
+  def _add(self, item):
+    mapping, hash, leaves, root = (
       self._mapping,
       self._hash_algo,
-      self.leaves
+      self.leaves,
+      self._root
     )
-
     last = leaves[-1]
-    sibiling = last.get_sibiling()
+    new_hash = hash(item)
+    node = mapping[new_hash] = MerkleNode(new_hash)
 
-    if isinstance(sibiling, _EmptyNode):
-      sibiling.hash = hash(item)
-      mapping[sibiling.hash] = sibiling
-      self._rehash(sibiling)
+    if last is root:
+      root = MerkleNode.combine(root, node, hash)
+      self._set_root(root)
       return
 
-    # TODO: finish the second case
-    raise NotImplemented
+    sibiling = last.get_sibiling()
+    connector = last.parent
+
+    if sibiling is _empty:
+      node.parent = connector
+      connector.right = node
+      self._rehash(node)
+      return
+
+    node.right = _empty
+    while connector is not root:
+      node = MerkleNode.combine(node, _empty, hash)
+      sibiling = connector.get_sibiling()
+      if sibiling is _empty:
+        connector.parent.right = node
+        node.parent = connector.parent
+        self._rehash(node)
+        return
+      connector = connector.parent
+
+    node = MerkleNode.combine(node, _empty, hash)
+    self._set_root(MerkleNode.combine(connector, node, hash))
+
+  def _set_root(self, new_root):
+    self._root = new_root
+    self.last_changed = time.time()
+
+  def add(self, item):
+    leaves = item
+    if isinstance(item, MerkleTree):
+      leaves = item.leaves
+    elif (isinstance(item, str) or
+        not isinstance(item, collections.Iterable)):
+      leaves = (item, )
+
+    for leaf in leaves:
+      self._add(leaf)
 
   @property
   def leaves(self):
