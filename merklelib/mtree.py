@@ -30,10 +30,6 @@ def _pairwise(iterable):
   return zip(a, a)
 
 
-def is_power(n):
-  return ((n & (n - 1)) == 0) and n != 0
-
-
 def _get_hash(obj):
   if isinstance(obj, _BaseNode):
     return str(obj.hash)
@@ -60,7 +56,7 @@ def _get_printable_tree(tree):
     left, right = node.left, node.right
     if left is not None:
       queue.append((left, AnyNode(name=left.hash, parent=par)))
-    if (right is not None) and (right is not _empty):
+    if right and (right is not _empty):
       any_node = AnyNode(name=right.hash, parent=par)
       queue.append((right, any_node))
   return parent
@@ -182,9 +178,9 @@ class MerkleNode(_BaseNode):
     self.hash = hash
     self.left = left
     self.right = right
-    if (left is not None) and (left is not _empty):
+    if left and (left is not _empty):
       left.parent = self
-    if (right is not None) and (right is not _empty):
+    if right and (right is not _empty):
       right.parent = self
     self.parent = parent
 
