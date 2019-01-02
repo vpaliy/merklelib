@@ -11,6 +11,7 @@ import io
 import math
 import time
 
+from merklelib import utils
 from anytree import AnyNode, RenderTree
 from anytree.exporter import DotExporter, JsonExporter
 
@@ -19,10 +20,9 @@ LEFT, RIGHT, UNKNOWN = tuple(range(3))
 _empty = object()
 
 
-def _default_hash(x):
-  if isinstance(x, str):
-    x = x.encode()
-  return hashlib.sha256(x).hexdigest()
+def _default_hash(value):
+  value = utils.to_string(value)
+  return hashlib.sha256(value).hexdigest()
 
 
 def _pairwise(iterable):
@@ -32,13 +32,8 @@ def _pairwise(iterable):
 
 def _get_hash(obj):
   if isinstance(obj, _BaseNode):
-    return str(obj.hash)
-  elif isinstance(obj, str):
-    return obj
-  raise TypeError(
-    'Object must be a an instance of _BaseNode or str'
-    f' got {type(obj)}'
-  )
+    return utils.to_string(obj.hash)
+  return utils.to_string(obj)
 
 
 def _get_printable_tree(tree):
@@ -49,15 +44,16 @@ def _get_printable_tree(tree):
   root = tree
   if isinstance(tree, MerkleTree):
     root = tree._root
-  parent = AnyNode(name=root.hash)
+  get_hash = lambda n: utils.to_hex(n.hash)
+  parent = AnyNode(name=get_hash(root))
   queue = [(root, parent)]
   while len(queue) > 0:
     node, par = queue.pop()
     left, right = node.left, node.right
     if left is not None:
-      queue.append((left, AnyNode(name=left.hash, parent=par)))
+      queue.append((left, AnyNode(name=get_hash(left), parent=par)))
     if right and (right is not _empty):
-      any_node = AnyNode(name=right.hash, parent=par)
+      any_node = AnyNode(name=get_hash(right), parent=par)
       queue.append((right, any_node))
   return parent
 
@@ -224,7 +220,7 @@ class MerkleTree(object):
       hash_algo = _default_hash
     elif not callable(hash_algo):
       raise TypeError('hash must be a callable')
-    self._hash_algo = hash_algo
+    self._hash_algo = lambda x: utils.from_hex(hash_algo(x))
 
   def _build_tree(self, leaves):
     self._mapping = self._root = None
@@ -281,7 +277,7 @@ class MerkleTree(object):
     leaf.hash = new
     self._rehash(leaf)
 
-  def _add(self, item):
+  def _append(self, item):
     mapping, hash, leaves, root = (
       self._mapping,
       self._hash_algo,
@@ -324,7 +320,7 @@ class MerkleTree(object):
     self._root = new_root
     self.last_changed = time.time()
 
-  def add(self, item):
+  def append(self, item):
     leaves = item
     if isinstance(item, MerkleTree):
       leaves = item.leaves
@@ -333,7 +329,7 @@ class MerkleTree(object):
       leaves = (item, )
 
     for leaf in leaves:
-      self._add(leaf)
+      self._append(leaf)
 
   @property
   def leaves(self):
