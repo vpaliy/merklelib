@@ -25,6 +25,17 @@ def _default_hash(value):
   return hashlib.sha256(value).hexdigest()
 
 
+def _hash_from_hex(func):
+  if hasattr(func, '_hex_decorator'):
+    return func._hex_decorator
+  @functools.wraps(func)
+  def _wrapper(*args, **kwargs):
+    hash_value = func(*args, **kwargs)
+    return utils.from_hex(hash_value)
+  func._hex_decorator = _wrapper
+  return _wrapper
+
+
 def _pairwise(iterable):
   a = iter(iterable)
   return zip(a, a)
@@ -124,19 +135,37 @@ def verify_tree(tree, root, m):
     new_root = functools.reduce(concat, paths)
   else:
     new_root = paths[0].hash
+  root = utils.from_hex(root)
   return new_root == root
 
 
 def verify_node(target, proof, hash_algo, root):
   if not callable(hash_algo):
     raise TypeError(f'Expected callable, got {type(hash_algo)}')
+  # we should convert from hexadecimal to bytes
+  hash_algo = _hash_from_hex(hash_algo)
+  paths = None
+
+  if isinstance(proof, collections.Iterable):
+    if isinstance(proof[0], AuditNode):
+      paths = proof
+    elif utils.is_string(proof[0]):
+      paths = [utils.from_hex(p) for p in proof]
+  elif isinstance(proof, AuditProof):
+    paths = proof._nodes
+  if paths is None:
+    raise TypeError(
+      'Proof must be either <AuditProof>, '
+      'a collection of <AuditNode> or hexadecimal strings.'
+      )
   # keep it dry
   concat = lambda x,y: _concat(hash_algo, x, y)
   def _calculate_root(target):
-    _proof = [target] + proof
+    _proof = [target] + paths
     return functools.reduce(concat, _proof)
 
   new_root = _calculate_root(target)
+  root = utils.from_hex(root)
   # try again if the user forgot to hash the target
   if new_root != root:
     try:
@@ -202,10 +231,27 @@ class MerkleNode(_BaseNode):
     return cls(_concat(hash, left, right), left, right)
 
 
-class AuditProof(_BaseNode):
+class AuditNode(_BaseNode):
   def __init__(self, hash, type):
     self.hash = hash
     self.type = type
+
+
+class AuditProof(object):
+  def __init__(self, nodes):
+    self._nodes = nodes
+
+  @property
+  def hex_nodes(self):
+    if not hasattr(self, '_hex_nodes'):
+      self._hex_nodes = [
+        utils.to_hex(n.hash) for n in self._nodes
+      ]
+    return self._hex_nodes
+
+  def __repr__(self):
+    items = ', '.join(self.hex_nodes)
+    return f'{{ items }}'
 
 
 class MerkleTree(object):
@@ -220,7 +266,7 @@ class MerkleTree(object):
       hash_algo = _default_hash
     elif not callable(hash_algo):
       raise TypeError('hash must be a callable')
-    self._hash_algo = lambda x: utils.from_hex(hash_algo(x))
+    self._hash_algo = _hash_from_hex(hash_algo)
 
   def _build_tree(self, leaves):
     self._mapping = self._root = None
@@ -240,17 +286,19 @@ class MerkleTree(object):
 
   def get_proof(self, leaf):
     mapping, hash = self._mapping, self._hash_algo
-    target = mapping.get(leaf, mapping.get(hash(leaf)))
+    target = mapping.get(utils.from_hex(leaf))
+    if target is None:
+      target = mapping.get(hash(leaf))
     if not isinstance(target, MerkleNode):
-      return []
-    root, proof = self._root, []
+      return AuditProof([])
+    root, paths = self._root, []
     while target is not root:
       sibiling = target.get_sibiling()
       if sibiling is not _empty:
-        audit_prf = AuditProof(sibiling.hash, sibiling.type)
-        proof.append(audit_prf)
+        node = AuditNode(sibiling.hash, sibiling.type)
+        paths.append(node)
       target = target.parent
-    return proof
+    return AuditProof(paths)
 
   def _rehash(self, node):
     root, hash = self._root, self._hash_algo
@@ -268,13 +316,13 @@ class MerkleTree(object):
         'You should hash them to avoid the exception.'
       )
     mapping, hash = self._mapping, self._hash_algo
-    leaf = mapping.get(old)
+    leaf = mapping.get(utils.from_hex(old))
     if leaf is None:
       leaf = mapping.get(hash(old))
       new = hash(new)
     if not isinstance(leaf, MerkleNode):
       raise KeyError('Invalid old value.')
-    leaf.hash = new
+    leaf.hash = utils.from_hex(new)
     self._rehash(leaf)
 
   def _append(self, item):
@@ -324,8 +372,9 @@ class MerkleTree(object):
     leaves = item
     if isinstance(item, MerkleTree):
       leaves = item.leaves
-    elif (isinstance(item, str) or
-        not isinstance(item, collections.Iterable)):
+    elif utils.is_string(item):
+      leaves = (item, )
+    elif not isinstance(item, collections.Iterable):
       leaves = (item, )
 
     for leaf in leaves:
@@ -337,9 +386,10 @@ class MerkleTree(object):
 
   @property
   def merkle_root(self):
-    if self._root is None:
+    root = self._root
+    if root is None:
       return None
-    return self._root.hash
+    return utils.to_hex(root.hash)
 
   @property
   def algo(self):
