@@ -7,3 +7,4 @@ __all__ = [
   ]
 
 from merklelib.mtree import *
+from merklelib.format import *

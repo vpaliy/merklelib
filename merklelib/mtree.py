@@ -12,11 +12,8 @@ import math
 import time
 
 from merklelib import utils
-from anytree import AnyNode, RenderTree
-from anytree.exporter import DotExporter, JsonExporter
 
 LEFT, RIGHT, UNKNOWN = tuple(range(3))
-
 _empty = object()
 
 
@@ -37,6 +34,35 @@ def _hash_from_hex(func):
   return _wrapper
 
 
+class Hasher(object):
+  def __init__(self, hashfunc):
+    if not callable(hashfunc):
+      raise TypeError(f'Expected callable, got {type(hashfunc)}')
+    self.hashfunc = hashfunc
+
+  def hash_leaf(self, data):
+    data = b'\x00' + utils.to_string(data)
+    return self._hashfunc(data)
+
+  def hash_children(self, left, right):
+    data = b'\x01' + left + right
+    return self._hashfunc(data)
+
+  @property
+  def hashfunc(self):
+    return self._hashfunc
+
+  @hashfunc.setter
+  def hashfunc(self, hashfunc):
+    self._hashfunc = _hash_from_hex(hashfunc)
+
+  def __repr__(self):
+    return f'{self.__class__.__name__}({self._hashfunc})'
+
+  def __str__(self):
+    return repr(self)
+
+
 def _pairwise(iterable):
   a = iter(iterable)
   return zip(a, a)
@@ -48,62 +74,16 @@ def _get_hash(obj):
   return utils.to_string(obj)
 
 
-def _get_printable_tree(tree):
-  if not isinstance(tree, (MerkleTree, MerkleNode)):
-    raise TypeError(
-      f'Expected MerkleTree or MerkleNode, got {type(tree)}'
-    )
-  root = tree
-  if isinstance(tree, MerkleTree):
-    root = tree._root
-  get_hash = lambda n: utils.to_hex(n.hash)
-  parent = AnyNode(name=get_hash(root))
-  queue = [(root, parent)]
-  while len(queue) > 0:
-    node, par = queue.pop()
-    left, right = node.left, node.right
-    if left is not None:
-      queue.append((left, AnyNode(name=get_hash(left), parent=par)))
-    if right and (right is not _empty):
-      any_node = AnyNode(name=get_hash(right), parent=par)
-      queue.append((right, any_node))
-  return parent
-
-
-def export(tree, filename, ext='json', **kwargs):
-  parent = _get_printable_tree(tree)
-  if ext == 'json':
-    with io.open(f'{filename}.json', mode='w+', encoding='utf-8') as fp:
-      JsonExporter(**kwargs).write(parent, fp)
-  else:
-    DotExporter(parent, **kwargs).to_picture(f'{filename}.{ext}')
-
-
-def jsonify(tree, **kwargs):
-  parent = _get_printable_tree(tree)
-  return JsonExporter(**kwargs).export(parent)
-
-
-def beautify(tree):
-  parent = _get_printable_tree(tree)
-  for pre, fill, node in RenderTree(parent):
-    print(f'{pre}{node.name}')
-
-
-def _concat(hash, *nodes):
+def _concat(hasher, *nodes):
   def __concat(x, y):
     if (x is _empty) or (y is _empty):
       return x.hash if y is _empty else y.hash
-    sum = lambda x, y: hash(_get_hash(x) + _get_hash(y))
-    if isinstance(x, _BaseNode):
-      if x.type == LEFT:
-        return sum(x, y)
-      elif x.type == RIGHT:
-        return sum(y, x)
-    if isinstance(y, _BaseNode):
-      if y.type == LEFT:
-        return sum(y, x)
-    return sum(x, y)
+    children = (_get_hash(x), _get_hash(y))
+    if isinstance(x, _BaseNode)and x.type == RIGHT:
+      return hasher.hash_children(*children[::-1])
+    if isinstance(y, _BaseNode) and y.type == LEFT:
+      return hasher.hash_children(*children[::-1])
+    return hasher.hash_children(*children)
   return functools.reduce(__concat, nodes)
 
 
@@ -142,7 +122,7 @@ def verify_tree(tree, root, old_size):
   if len(paths) > 1:
     paths = paths[::-1]
     # order is important !
-    concat = lambda a,b: _concat(tree.algo, b, a)
+    concat = lambda a,b: _concat(tree.hasher, b, a)
     new_root = functools.reduce(concat, paths)
   else:
     new_root = paths[0].hash
@@ -150,11 +130,12 @@ def verify_tree(tree, root, old_size):
   return new_root == root
 
 
-def verify_node(target, proof, hash_algo, root):
-  if not callable(hash_algo):
-    raise TypeError(f'Expected callable, got {type(hash_algo)}')
-  # we should convert from hexadecimal to bytes
-  hash_algo = _hash_from_hex(hash_algo)
+def verify_node(target, proof, hasher, root):
+  if not isinstance(hasher, Hasher):
+    if not callable(hasher):
+      raise TypeError(f'Expected callable, got {type(hasher)}')
+    hasher = Hasher(hashfunc=hasher)
+
   paths = None
 
   if isinstance(proof, collections.Iterable):
@@ -170,7 +151,7 @@ def verify_node(target, proof, hash_algo, root):
       'a collection of <AuditNode> or hexadecimal strings.'
       )
   # keep it dry
-  concat = lambda x,y: _concat(hash_algo, x, y)
+  concat = lambda x,y: _concat(hasher, x, y)
   def _calculate_root(target):
     _proof = [target] + paths
     return functools.reduce(concat, _proof)
@@ -180,7 +161,7 @@ def verify_node(target, proof, hash_algo, root):
   # try again if the user forgot to hash the target
   if new_root != root:
     try:
-      new_root = _calculate_root(hash_algo(target))
+      new_root = _calculate_root(hasher.hash_leaf(target))
     except:
       pass
   return new_root == root
@@ -238,8 +219,8 @@ class MerkleNode(_BaseNode):
     return LEFT if (parent.left is self) else RIGHT
 
   @classmethod
-  def combine(cls, left, right, hash):
-    return cls(_concat(hash, left, right), left, right)
+  def combine(cls, hasher, left, right):
+    return cls(_concat(hasher, left, right), left, right)
 
 
 class AuditNode(_BaseNode):
@@ -266,28 +247,28 @@ class AuditProof(object):
 
 
 class MerkleTree(object):
-  def __init__(self, leaves, hash_algo=None):
+  def __init__(self, leaves, hashfunc=None):
     if not leaves:
       raise ValueError('Invalid leaves param')
-    self._init_hash_algo(hash_algo)
+    self._init_hashfunc(hashfunc)
     self._build_tree(leaves)
 
-  def _init_hash_algo(self, hash_algo):
-    if hash_algo is None:
-      hash_algo = _default_hash
-    elif not callable(hash_algo):
+  def _init_hashfunc(self, hashfunc):
+    if hashfunc is None:
+      hashfunc = _default_hash
+    elif not callable(hashfunc):
       raise TypeError('hash must be a callable')
-    self._hash_algo = _hash_from_hex(hash_algo)
+    self._hasher = Hasher(hashfunc)
 
   def _build_tree(self, leaves):
     self._mapping = self._root = None
-    hash = self._hash_algo
-    nodes = [MerkleNode(hash(leaf)) for leaf in leaves]
+    hasher = self._hasher
+    nodes = [MerkleNode(hasher.hash_leaf(leaf)) for leaf in leaves]
     leaves = list(nodes)
     while len(nodes) > 1:
       if (len(nodes) % 2) != 0:
         nodes.append(_empty)
-      nodes = [MerkleNode.combine(l, r, hash) for l, r in _pairwise(nodes)]
+      nodes = [MerkleNode.combine(hasher, l, r) for l, r in _pairwise(nodes)]
     if len(leaves) > 0:
       mapping = collections.OrderedDict()
       for leaf in leaves:
@@ -296,10 +277,10 @@ class MerkleTree(object):
       self._set_root(nodes[0])
 
   def get_proof(self, leaf):
-    mapping, hash = self._mapping, self._hash_algo
+    mapping, hasher = self._mapping, self._hasher
     target = mapping.get(utils.from_hex(leaf))
     if target is None:
-      target = mapping.get(hash(leaf))
+      target = mapping.get(hasher.hash_leaf(leaf))
     if not isinstance(target, MerkleNode):
       return AuditProof([])
     root, paths = self._root, []
@@ -312,12 +293,12 @@ class MerkleTree(object):
     return AuditProof(paths)
 
   def _rehash(self, node):
-    root, hash = self._root, self._hash_algo
+    root, hasher = self._root, self._hasher
     # rehash all the nodes to the root
     while node is not root:
       parent = node.parent
       sibiling = node.get_sibiling()
-      parent.hash = _concat(hash, node, sibiling)
+      parent.hash = _concat(hasher, node, sibiling)
       node = parent
 
   def update(self, old, new):
@@ -326,29 +307,29 @@ class MerkleTree(object):
         'Old and the new value are of different types.'
         'You should hash them to avoid the exception.'
       )
-    mapping, hash = self._mapping, self._hash_algo
+    mapping, hasher = self._mapping, self._hasher
     leaf = mapping.get(utils.from_hex(old))
     if leaf is None:
-      leaf = mapping.get(hash(old))
-      new = hash(new)
+      leaf = mapping.get(hasher.hash_leaf(old))
+      new = hasher.hash_leaf(new)
     if not isinstance(leaf, MerkleNode):
       raise KeyError('Invalid old value.')
     leaf.hash = utils.from_hex(new)
     self._rehash(leaf)
 
   def _append(self, item):
-    mapping, hash, leaves, root = (
+    mapping, hasher, leaves, root = (
       self._mapping,
-      self._hash_algo,
+      self._hasher,
       self.leaves,
       self._root
     )
     last = leaves[-1]
-    new_hash = hash(item)
+    new_hash = hasher.hash_leaf(item)
     node = mapping[new_hash] = MerkleNode(new_hash)
 
     if last is root:
-      root = MerkleNode.combine(root, node, hash)
+      root = MerkleNode.combine(hasher, root, node)
       self._set_root(root)
       return
 
@@ -363,7 +344,7 @@ class MerkleTree(object):
 
     node.right = _empty
     while connector is not root:
-      node = MerkleNode.combine(node, _empty, hash)
+      node = MerkleNode.combine(hasher, node, _empty)
       sibiling = connector.get_sibiling()
       if sibiling is _empty:
         connector.parent.right = node
@@ -372,8 +353,8 @@ class MerkleTree(object):
         return
       connector = connector.parent
 
-    node = MerkleNode.combine(node, _empty, hash)
-    self._set_root(MerkleNode.combine(connector, node, hash))
+    node = MerkleNode.combine(hasher, node, _empty)
+    self._set_root(MerkleNode.combine(hasher, connector, node))
 
   def _set_root(self, new_root):
     self._root = new_root
@@ -403,18 +384,22 @@ class MerkleTree(object):
     return utils.to_hex(root.hash)
 
   @property
-  def algo(self):
-    return self._hash_algo
+  def hasher(self):
+    return self._hasher
 
-  @algo.setter
-  def algo(self, hash_algo):
-    self._init_hash_algo(hash_algo)
+  @hasher.setter
+  def hasher(self, hasher):
+    if not isinstance(hasher, Hasher):
+      if not callable(hasher):
+        raise TypeError('Hash function should be callable.')
+      hasher = Hasher(hashfunc=hasher)
+    self._hasher = hasher
 
   def verify(self, target, proof):
     return verify_node(
       target,
       proof,
-      self.algo,
+      self._hasher,
       self.merkle_root
     )
 
