@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 from merklelib import utils
 from merklelib.mtree import MerkleNode, MerkleTree, _BaseNode
 

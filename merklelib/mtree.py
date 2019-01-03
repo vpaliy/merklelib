@@ -252,7 +252,7 @@ class AuditProof(object):
 
   def __str(self):
     return repr(self)
-    
+
 
 @functools.total_ordering
 class MerkleTree(object):
@@ -416,10 +416,13 @@ class MerkleTree(object):
     return len(self._mapping)
 
   def __eq__(self, other):
-    if len(other) == len(self):
-      old_root = utils.from_hex(other.merkle_root)
-      return self._root.hash == old_root
-    return False
+    root_hash = self._root.hash
+    if isinstance(other, MerkleTree):
+      other_root_hash = utils.from_hex(other.merkle_root)
+    else:
+      other = utils.to_string(other)
+      other_root_hash = utils.from_hex(other)
+    return root_hash == other_root_hash
 
   def __ge__(self, other):
     return verify_tree_consistency(
