@@ -42,8 +42,15 @@ def getsize(obj_0):
   return inner(obj_0)
 
 
-def _to_sec(start):
+def _get_seconds(start):
   return (datetime.now() - start).total_seconds()
+
+
+def _print_times(average, total, max_t, min_t):
+  print(f' Average time: {average} seconds.')
+  print(f' Total time: {total} seconds.')
+  print(f' Longest time: {max_t} seconds.')
+  print(f' Shortest time: {min_t} seconds.')
 
 
 def main():
@@ -52,14 +59,14 @@ def main():
     '-s', '--size',
     help='Initial number of leaves',
     dest='size',
-    default=2 ** 15
+    default=2 ** 10
   )
 
   parser.add_argument(
     '-a', '--additional',
     help='Number of leaves that we need to append',
     dest='additional',
-    default=2 ** 5
+    default=2 ** 10
   )
 
   parser.add_argument(
@@ -80,36 +87,67 @@ def main():
 
   tree = MerkleTree(value for value in range(start))
 
-  print(f'Building: {_to_sec(start_t)} seconds.')
+  print(f'Building: {_get_seconds(start_t)} seconds.')
   start_t = datetime.now()
 
   # appending
   for v in range(start, start + end):
     tree.append(v)
 
-  print(f'Appending: {_to_sec(start_t)} seconds.')
+  print(f'Appending: {_get_seconds(start_t)} seconds.')
   print(f'Tree size: {getsize(tree)}')
+  print(f'Number of leaves: {len(tree)}')
 
   if args.printable:
     beautify(tree)
 
   start_t = datetime.now()
 
+  total, start_t = 0.0, datetime.now()
+  max_t = min_t = None
   for leaf in range(count):
+    cycle_t = datetime.now()
     proof = tree.get_proof(leaf)
     if not tree.verify(leaf, proof):
       exit(f'Failed audit proof: {leaf}')
+    seconds = _get_seconds(cycle_t)
+    if max_t is None:
+      max_t = min_t = seconds
+    else:
+      max_t = max(max_t, seconds)
+      min_t = min(min_t, seconds)
+    total += seconds
 
+  print(f'Audit proof verification times:')
+  _print_times(
+    average=(total / float(count)),
+    total=_get_seconds(start_t),
+    max_t=max_t,
+    min_t=min_t
+  )
 
-  print(f'Audit proof verification: {_to_sec(start_t)} milliseconds.')
-  start_t = datetime.now()
-
+  total, start_t = 0.0, datetime.now()
+  max_t = min_t = None
   for limit in range(1, count):
+    cycle_t = datetime.now()
     test = MerkleTree([value for value in range(limit)])
     if not (tree == test):
       exit(f'Failed consistency proof: {limit}')
+    seconds = _get_seconds(cycle_t)
+    if max_t is None:
+      max_t = min_t = seconds
+    else:
+      max_t = max(max_t, seconds)
+      min_t = min(min_t, seconds)
+    total += seconds
 
-  print(f'Consistency proof verification: {_to_sec(start_t)} milliseconds.')
+  print(f'Consitency proof verification times ({count} trees):')
+  _print_times(
+    average=(total / float(count)),
+    total=_get_seconds(start_t),
+    max_t=max_t,
+    min_t=min_t
+  )
 
 
 if __name__ == '__main__':
