@@ -80,7 +80,7 @@ def main():
   )
 
   args = parser.parse_args()
-  start, end = args.size, args.additional
+  start, end = int(args.size), int(args.additional)
   count = start + end
 
   start_t = datetime.now()
@@ -108,7 +108,7 @@ def main():
   for leaf in range(count):
     cycle_t = datetime.now()
     proof = tree.get_proof(leaf)
-    if not tree.verify(leaf, proof):
+    if not tree.verify_leaf_inclusion(leaf, proof):
       exit(f'Failed audit proof: {leaf}')
     seconds = _get_seconds(cycle_t)
     if max_t is None:
@@ -131,7 +131,7 @@ def main():
   for limit in range(1, count):
     cycle_t = datetime.now()
     test = MerkleTree([value for value in range(limit)])
-    if not (tree == test):
+    if tree < test:
       exit(f'Failed consistency proof: {limit}')
     seconds = _get_seconds(cycle_t)
     if max_t is None:

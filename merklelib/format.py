@@ -1,5 +1,5 @@
 from merklelib import utils
-from merklelib.mtree import MerkleNode, MerkleTree
+from merklelib.mtree import MerkleNode, MerkleTree, _BaseNode
 
 from anytree import AnyNode, RenderTree
 from anytree.exporter import DotExporter, JsonExporter
@@ -22,9 +22,9 @@ def _get_printable_tree(tree):
   while len(queue) > 0:
     node, par = queue.pop()
     left, right = node.left, node.right
-    if left is not None:
+    if isinstance(left, _BaseNode):
       queue.append((left, AnyNode(name=get_hash(left), parent=par)))
-    if right and (right is not _empty):
+    if isinstance(right, _BaseNode):
       any_node = AnyNode(name=get_hash(right), parent=par)
       queue.append((right, any_node))
   return parent

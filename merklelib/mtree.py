@@ -14,6 +14,7 @@ import time
 from merklelib import utils
 
 LEFT, RIGHT, UNKNOWN = tuple(range(3))
+
 _empty = object()
 
 
@@ -79,9 +80,9 @@ def _concat(hasher, *nodes):
     if (x is _empty) or (y is _empty):
       return x.hash if y is _empty else y.hash
     children = (_get_hash(x), _get_hash(y))
-    if isinstance(x, _BaseNode)and x.type == RIGHT:
+    if isinstance(x, _BaseNode) and x.type == RIGHT:
       return hasher.hash_children(*children[::-1])
-    if isinstance(y, _BaseNode) and y.type == LEFT:
+    elif isinstance(y, _BaseNode) and y.type == LEFT:
       return hasher.hash_children(*children[::-1])
     return hasher.hash_children(*children)
   return functools.reduce(__concat, nodes)
@@ -94,24 +95,25 @@ def _climb_to(node, level):
   return node
 
 
-def verify_tree(tree, root, old_size):
-  if not isinstance(tree, MerkleTree):
-    raise TypeError(f'Expected MerkleTree, got {type(tree)}')
+def verify_tree_consistency(new_tree, old_root, old_size):
+  if not isinstance(new_tree, MerkleTree):
+    raise TypeError(f'Expected MerkleTree, got {type(new_tree)}')
 
-  new_size = len(tree)
+  new_size = len(new_tree)
   if new_size < old_size:
     return False
 
-  root = utils.from_hex(root)
-  new_root = utils.from_hex(tree.merkle_root)
-  if new_size == old_size:
-    return root == new_root
+  old_root = utils.from_hex(old_root)
+  new_root = utils.from_hex(new_tree.merkle_root)
 
-  leaves = tree.leaves
+  if new_size == old_size:
+    return old_root == new_root
+
+  leaves = new_tree.leaves
   index, paths = 0, []
 
   while old_size > 0:
-    level = 2 ** (old_size.bit_length() - 1)
+    level = 2**(old_size.bit_length() - 1)
     node = _climb_to(leaves[index], math.log(level, 2))
     if node is None:
       return False
@@ -121,16 +123,15 @@ def verify_tree(tree, root, old_size):
 
   if len(paths) > 1:
     paths = paths[::-1]
-    # order is important !
-    concat = lambda a,b: _concat(tree.hasher, b, a)
+    hasher = new_tree.hasher
+    concat = lambda a,b: _concat(hasher, a, b)
     new_root = functools.reduce(concat, paths)
   else:
     new_root = paths[0].hash
+  return new_root == old_root
 
-  return new_root == root
 
-
-def verify_node(target, proof, hasher, root):
+def verify_leaf_inclusion(target, proof, hasher, root):
   if not isinstance(hasher, Hasher):
     if not callable(hasher):
       raise TypeError(f'Expected callable, got {type(hasher)}')
@@ -185,6 +186,9 @@ class _BaseNode(object):
     name = type(self).__name__
     return f'<{name} {self.hash}>'
 
+  def __str__(self):
+    return repr(self)
+
 
 class MerkleNode(_BaseNode):
   __slots__ = ('left', 'right', 'parent',)
@@ -201,7 +205,8 @@ class MerkleNode(_BaseNode):
       right.parent = self
     self.parent = parent
 
-  def get_sibiling(self):
+  @property
+  def sibiling(self):
     parent = self.parent
     if parent is None:
       return None
@@ -245,7 +250,11 @@ class AuditProof(object):
     items = ', '.join(self.hex_nodes)
     return f'{{ items }}'
 
+  def __str(self):
+    return repr(self)
+    
 
+@functools.total_ordering
 class MerkleTree(object):
   def __init__(self, leaves, hashfunc=None):
     if not leaves:
@@ -285,7 +294,7 @@ class MerkleTree(object):
       return AuditProof([])
     root, paths = self._root, []
     while target is not root:
-      sibiling = target.get_sibiling()
+      sibiling = target.sibiling
       if sibiling is not _empty:
         node = AuditNode(sibiling.hash, sibiling.type)
         paths.append(node)
@@ -297,7 +306,7 @@ class MerkleTree(object):
     # rehash all the nodes to the root
     while node is not root:
       parent = node.parent
-      sibiling = node.get_sibiling()
+      sibiling = node.sibiling
       parent.hash = _concat(hasher, node, sibiling)
       node = parent
 
@@ -333,7 +342,7 @@ class MerkleTree(object):
       self._set_root(root)
       return
 
-    sibiling = last.get_sibiling()
+    sibiling = last.sibiling
     connector = last.parent
 
     if sibiling is _empty:
@@ -345,7 +354,7 @@ class MerkleTree(object):
     node.right = _empty
     while connector is not root:
       node = MerkleNode.combine(hasher, node, _empty)
-      sibiling = connector.get_sibiling()
+      sibiling = connector.sibiling
       if sibiling is _empty:
         connector.parent.right = node
         node.parent = connector.parent
@@ -395,8 +404,8 @@ class MerkleTree(object):
       hasher = Hasher(hashfunc=hasher)
     self._hasher = hasher
 
-  def verify(self, target, proof):
-    return verify_node(
+  def verify_leaf_inclusion(self, target, proof):
+    return verify_leaf_inclusion(
       target,
       proof,
       self._hasher,
@@ -407,11 +416,20 @@ class MerkleTree(object):
     return len(self._mapping)
 
   def __eq__(self, other):
-    return verify_tree(
+    if len(other) == len(self):
+      old_root = utils.from_hex(other.merkle_root)
+      return self._root.hash == old_root
+    return False
+
+  def __ge__(self, other):
+    return verify_tree_consistency(
       self,
       other.merkle_root,
       len(other)
     )
 
   def __repr__(self):
-    return f'<MerkleTree {self.merkle_root}>'
+    return f'{self.__class__.__name__}({self.merkle_root})'
+
+  def __str__(self):
+    return repr(self)
