@@ -26,6 +26,7 @@ def _default_hash(value):
 
 
 def _hash_from_hex(func):
+  # keep it dry
   if hasattr(func, '_hex_decorator'):
     return func._hex_decorator
   @functools.wraps(func)
@@ -113,21 +114,31 @@ def _climb_to(node, level):
   return node
 
 
-def verify_tree(tree, root, m):
+def verify_tree(tree, root, old_size):
   if not isinstance(tree, MerkleTree):
     raise TypeError(f'Expected MerkleTree, got {type(tree)}')
-  if len(tree) < m:
+
+  new_size = len(tree)
+  if new_size < old_size:
     return False
+
+  root = utils.from_hex(root)
+  new_root = utils.from_hex(tree.merkle_root)
+  if new_size == old_size:
+    return root == new_root
+
   leaves = tree.leaves
   index, paths = 0, []
-  while m > 0:
-    level = 2 ** (m.bit_length() - 1)
+
+  while old_size > 0:
+    level = 2 ** (old_size.bit_length() - 1)
     node = _climb_to(leaves[index], math.log(level, 2))
     if node is None:
       return False
     paths.append(node)
     index += level
-    m -= level
+    old_size -= level
+
   if len(paths) > 1:
     paths = paths[::-1]
     # order is important !
@@ -135,7 +146,7 @@ def verify_tree(tree, root, m):
     new_root = functools.reduce(concat, paths)
   else:
     new_root = paths[0].hash
-  root = utils.from_hex(root)
+
   return new_root == root
 
 
