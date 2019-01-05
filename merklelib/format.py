@@ -1,6 +1,6 @@
 # -*- coding: future_fstrings -*-
 from merklelib import utils
-from merklelib.mtree import MerkleNode, MerkleTree, _BaseNode
+from merklelib.merkle import MerkleNode, MerkleTree, _BaseNode
 
 from anytree import AnyNode, RenderTree
 from anytree.exporter import DotExporter, JsonExporter

@@ -6,5 +6,5 @@ __all__ = [
     'AuditNode', 'beautify', 'jsonify', 'export'
   ]
 
-from merklelib.mtree import *
+from merklelib.merkle import *
 from merklelib.format import *
