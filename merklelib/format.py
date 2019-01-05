@@ -1,4 +1,7 @@
 # -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 from merklelib import utils
 from merklelib.merkle import MerkleNode, MerkleTree, _BaseNode
 

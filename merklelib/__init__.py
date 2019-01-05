@@ -2,7 +2,7 @@
 __version__ = '1.0'
 
 __all__ = [
-    'MerkleTree', 'AuditProof',
+    'MerkleTree', 'AuditProof', 'Hasher',
     'AuditNode', 'beautify', 'jsonify', 'export'
   ]
 
