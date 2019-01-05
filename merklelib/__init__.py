@@ -2,9 +2,9 @@
 __version__ = '1.0'
 
 __all__ = [
-    'MerkleTree', 'AuditProof',
+    'MerkleTree', 'AuditProof', 'Hasher',
     'AuditNode', 'beautify', 'jsonify', 'export'
   ]
 
-from merklelib.mtree import *
+from merklelib.merkle import *
 from merklelib.format import *
