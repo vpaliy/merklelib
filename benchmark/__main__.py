@@ -1,4 +1,7 @@
 # -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 import argparse
 import gc
 import sys
@@ -59,14 +62,14 @@ def main():
     '-s', '--size',
     help='Initial number of leaves',
     dest='size',
-    default=2 ** 10
+    default=2 ** 16
   )
 
   parser.add_argument(
     '-a', '--additional',
     help='Number of leaves that we need to append',
     dest='additional',
-    default=2 ** 10
+    default=2 ** 0
   )
 
   parser.add_argument(
