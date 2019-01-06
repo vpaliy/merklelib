@@ -62,14 +62,14 @@ def main():
     '-s', '--size',
     help='Initial number of leaves',
     dest='size',
-    default=2 ** 16
+    default=2 ** 8
   )
 
   parser.add_argument(
     '-a', '--additional',
     help='Number of leaves that we need to append',
     dest='additional',
-    default=2 ** 0
+    default=2 ** 1
   )
 
   parser.add_argument(
