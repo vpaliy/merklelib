@@ -1,4 +1,6 @@
 # -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import with_statement
 
@@ -36,7 +38,7 @@ def _hash_from_hex(func):
 
 
 class Hasher(object):
-  def __init__(self, hashfunc):
+  def __init__(self, hashfunc=_default_hash):
     if not callable(hashfunc):
       raise TypeError(f'Expected callable, got {type(hashfunc)}')
     self.hashfunc = hashfunc
@@ -58,7 +60,9 @@ class Hasher(object):
     self._hashfunc = _hash_from_hex(hashfunc)
 
   def __repr__(self):
-    return f'{self.__class__.__name__}({self._hashfunc})'
+    classname = self.__class__.__name__
+    hashfunc = self._hashfunc.__wrapped__
+    return f'{classname}({hashfunc})'
 
   def __str__(self):
     return repr(self)
@@ -248,7 +252,7 @@ class AuditProof(object):
 
   def __repr__(self):
     items = ', '.join(self.hex_nodes)
-    return f'{{ items }}'
+    return f'{{{items}}}'
 
   def __str(self):
     return repr(self)
