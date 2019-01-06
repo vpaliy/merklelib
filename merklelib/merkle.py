@@ -34,6 +34,7 @@ def _hash_from_hex(func):
     hash_value = func(*args, **kwargs)
     return utils.from_hex(hash_value)
   func._hex_decorator = _wrapper
+  _wrapper.__wrapped__ = func
   return _wrapper
 
 

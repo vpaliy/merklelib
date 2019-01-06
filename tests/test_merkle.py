@@ -3,6 +3,7 @@ import unittest
 import hashlib
 import math
 import string
+import collections
 
 try:
   import unittest.mock as mock
@@ -11,6 +12,7 @@ except ImportError:
 
 from os import urandom
 from random import choice
+from merklelib.compat import is_py2
 
 from merklelib import utils
 from merklelib.merkle import (
@@ -55,7 +57,8 @@ def patchdescriptor(cls, method, new):
   return _patchdescriptor
 
 
-def _calculate_root(hashfunc, nodes):
+def _calculate_root(nodes):
+  hasher = Hasher(hashfunc)
   while len(nodes) > 1:
     if len(nodes) % 2 != 0:
       nodes.append(nodes[-1])
@@ -64,7 +67,7 @@ def _calculate_root(hashfunc, nodes):
     for l, r in zip(a, a):
       hashval = l
       if hashval != r:
-        hashval = hashfunc(l, r)
+        hashval = hasher.hash_children(l, r)
       nodes.append(hashval)
   return nodes[0]
 
@@ -165,8 +168,7 @@ class MerkleTestCase(unittest.TestCase):
     # basic check
     tree = MerkleTree(leaves, hasher)
     self.assertEqual(tree.hexleaves, hashes)
-    self.assertEqual(tree.merkle_root,
-      _calculate_root(hasher.hash_children, hashes))
+    self.assertEqual(tree.merkle_root, _calculate_root(hashes))
 
     # converting non iterable leaves to tuples
     tree = MerkleTree('a', hasher)
@@ -196,15 +198,16 @@ class MerkleTestCase(unittest.TestCase):
 
   def test_merkle_tree_update(self):
     chars = string.ascii_letters
-    hash_mapping = {char: hasher.hash_leaf(char) for char in chars}
+    hash_mapping = collections.OrderedDict()
+
+    for char in chars:
+      hash_mapping[char] = hasher.hash_leaf(char)
 
     tree = MerkleTree(chars, hasher)
     initial_merkle_root = tree.merkle_root
+
     # calculate the merkle root manually from hashes
-    current_root = _calculate_root(
-      hasher.hash_children,
-      hash_mapping.values()
-    )
+    current_root = _calculate_root(hash_mapping.values())
 
     self.assertEqual(initial_merkle_root, current_root)
     self.assertRaises(KeyError, tree.update, 'invalid', 'a')
@@ -217,10 +220,7 @@ class MerkleTestCase(unittest.TestCase):
       tree.update(a, b)
 
       # calculate the merkle root manually from hashes
-      current_root = _calculate_root(
-        hasher.hash_children,
-        hash_mapping.values()
-      )
+      current_root = _calculate_root(hash_mapping.values())
 
       self.assertNotEqual(tree.merkle_root, initial_merkle_root)
       self.assertNotEqual(tree.merkle_root, prev_merkle_root)
@@ -248,7 +248,7 @@ class MerkleTestCase(unittest.TestCase):
 
     # append every ascii character
     tree.clear(); tree.extend(ascii)
-    expected_hash = _calculate_root(hasher.hash_children, hashes)
+    expected_hash = _calculate_root(hashes)
 
     self.assertEqual(len(tree), len(ascii))
     self.assertEqual(tree.merkle_root, expected_hash)
@@ -256,7 +256,7 @@ class MerkleTestCase(unittest.TestCase):
     # test all cases
     for limit in range(1, len(ascii)):
       tree.clear(); tree.extend(ascii[:limit])
-      expected_hash = _calculate_root(hasher.hash_children, hashes[:limit])
+      expected_hash = _calculate_root(hashes[:limit])
 
       self.assertEqual(len(tree), limit)
       self.assertEqual(tree.merkle_root, expected_hash)
