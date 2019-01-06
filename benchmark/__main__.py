@@ -33,7 +33,7 @@ def getsize(obj_0):
     if isinstance(obj, zero_depth_bases):
       pass # bypass remaining control flow and return
     elif isinstance(obj, (tuple, list, Set, deque)):
-      size += sum(inner(i) for i in obj)
+      size += sum(sys.getsizeof(i) for i in obj)
     elif isinstance(obj, Mapping) or hasattr(obj, iteritems):
       size += sum(inner(k) + inner(v) for k, v in getattr(obj, iteritems)())
     # Check for custom object instances - may subclass above too
