@@ -135,25 +135,25 @@ def verify_tree_consistency(new_tree, old_root, old_size):
   return new_root == old_root
 
 
-def verify_leaf_inclusion(target, proof, hasher, root):
-  if not isinstance(hasher, Hasher):
-    if not callable(hasher):
-      raise TypeError(f'Expected callable, got {type(hasher)}')
-    hasher = Hasher(hashfunc=hasher)
+def verify_leaf_inclusion(target, proof, hashobj, root):
+  if not isinstance(hashobj, Hasher):
+    if not callable(hashobj):
+      raise TypeError(f'Expected callable, got {type(hashobj)}')
+    hashobj = Hasher(hashobj)
 
+  hasher = hashobj
   paths = None
 
   if isinstance(proof, collections.Iterable):
     if isinstance(proof[0], AuditNode):
       paths = proof
-    elif utils.is_string(proof[0]):
-      paths = [utils.from_hex(p) for p in proof]
   elif isinstance(proof, AuditProof):
     paths = proof._nodes
+
   if paths is None:
     raise TypeError(
       'Proof must be either <AuditProof>, '
-      'a collection of <AuditNode> or hexadecimal strings.'
+      'a collection of <AuditNode> objects.'
       )
   # keep it dry
   concat = lambda x,y: _concat(hasher, x, y)
@@ -258,7 +258,7 @@ class AuditProof(object):
     return all([
       isinstance(other, AuditProof),
       len(self) == len(other),
-      sorted(self._nodes) == sorted(other._nodes)
+      set(self.hex_nodes) == set(other.hex_nodes)
     ])
 
   def __repr__(self):

@@ -21,19 +21,19 @@ from merklelib.merkle import (
     AuditNode,
     LEFT,
     RIGHT,
-    UNKNOWN
+    UNKNOWN,
+    verify_leaf_inclusion,
+    verify_tree_consistency
 )
-
-
-leaf = b'765f15d171871b00034ee55e48f'
-
 
 def hashfunc(x):
   return hashlib.sha256(x).digest()
 
+
 # used for side effects
 def mirror(x):
   return x
+
 
 # Adding __dict__ would allow to mock prototype methods
 class MerkleNode(MerkleNode):
@@ -69,11 +69,17 @@ def _calculate_root(hashfunc, nodes):
   return nodes[0]
 
 
-class MerkleTreeTestCase(unittest.TestCase):
+# commonly used objects across tests
+hasher = Hasher(hashfunc)
+leaf = b'765f15d171871b00034ee55e48f'
+
+to_hex = mock.patch('merklelib.utils.to_hex', side_effect=mirror)
+to_hex.start()
+
+
+class MerkleTestCase(unittest.TestCase):
   def test_hasher(self):
     children = leaf * 2
-
-    hasher = Hasher(hashfunc)
     classname = hasher.__class__.__name__
 
     self.assertEqual(hasher.hash_leaf(leaf), hashfunc(b'\x00' + leaf))
@@ -103,7 +109,6 @@ class MerkleTreeTestCase(unittest.TestCase):
 
   @patchdescriptor(MerkleNode, 'type', UNKNOWN)
   def test_merkle_node_combine(self):
-    hasher = Hasher(hashfunc)
     lefthash = hashfunc(b'\x01'+leaf)
     righthash = hashfunc(b'\x02'+leaf)
 
@@ -132,27 +137,20 @@ class MerkleTreeTestCase(unittest.TestCase):
 
     _assert_all(hasher.hash_children(righthash, lefthash))
 
-  @mock.patch('merklelib.utils.to_hex', autospec=True)
-  def test_audit_proof(self, to_hex_mock):
-    to_hex_mock.side_effect = mirror
-
-    hashes = [f'{urandom(2048)}{leaf}' for i in range(65)]
+  def test_audit_proof(self):
+    hashes = list(string.ascii_letters)
     nodes = [AuditNode(hash, choice([LEFT, RIGHT])) for hash in hashes]
 
     proof = AuditProof(nodes)
     items = ', '.join(hashes)
-    string = f'{{{items}}}'
+    items_str = f'{{{items}}}'
 
     self.assertEqual(proof.hex_nodes, hashes)
-    self.assertEqual(repr(proof), string)
-    self.assertEqual(str(proof), string)
+    self.assertEqual(repr(proof), items_str)
+    self.assertEqual(str(proof), items_str)
 
-  @mock.patch('merklelib.utils.to_hex', autospec=True)
-  def test_merkle_tree_init(self, to_hex_mock):
-    to_hex_mock.side_effect = mirror
-
-    hasher = Hasher(hashfunc)
-    leaves = [f'{urandom(2048)}{leaf}' for i in range(65)]
+  def test_merkle_tree_init(self):
+    leaves = list(string.ascii_letters)
     hashes = [hasher.hash_leaf(leaf) for leaf in leaves]
 
     # testing _init_hashfunc
@@ -180,12 +178,8 @@ class MerkleTreeTestCase(unittest.TestCase):
     self.assertEqual(tree.hexleaves, [])
     self.assertEqual(tree.merkle_root, None)
 
-  @mock.patch('merklelib.utils.to_hex', autospec=True)
-  def test_merkle_tree_get_proof(self, to_hex_mock):
-    to_hex_mock.side_effect = mirror
-    hasher = Hasher(hashfunc)
-    chars = list('abcdefgh')
-
+  def test_merkle_tree_get_proof(self):
+    chars = list(string.ascii_letters[:32])
     tree = MerkleTree(chars, hasher)
 
     self.assertEqual(tree.get_proof('invalid'), AuditProof([]))
@@ -200,12 +194,9 @@ class MerkleTreeTestCase(unittest.TestCase):
       proof = tree.get_proof(hasher.hash_leaf(char))
       self.assertEqual(len(proof), expected)
 
-  @mock.patch('merklelib.utils.to_hex', autospec=True)
-  def test_merkle_tree_update(self, to_hex_mock):
-    to_hex_mock.side_effect = mirror
-    hasher = Hasher(hashfunc)
+  def test_merkle_tree_update(self):
     chars = string.ascii_letters
-    hash_mapping = { char: hasher.hash_leaf(char) for char in chars }
+    hash_mapping = {char: hasher.hash_leaf(char) for char in chars}
 
     tree = MerkleTree(chars, hasher)
     initial_merkle_root = tree.merkle_root
@@ -242,11 +233,7 @@ class MerkleTreeTestCase(unittest.TestCase):
       self.assertNotEqual(tree.merkle_root, prev_merkle_root)
       self.assertEqual(tree.merkle_root, current_root)
 
-  @mock.patch('merklelib.utils.to_hex', autospec=True)
-  def test_merkle_tree_append(self, to_hex_mock):
-    to_hex_mock.side_effect = mirror
-
-    hasher = Hasher(hashfunc)
+  def test_merkle_tree_append(self):
     ascii = string.ascii_letters
     hashes = [hasher.hash_leaf(char) for char in ascii]
 
@@ -275,7 +262,6 @@ class MerkleTreeTestCase(unittest.TestCase):
       self.assertEqual(tree.merkle_root, expected_hash)
 
   def test_merkle_tree_equals(self):
-
     a = MerkleTree(string.ascii_letters)
     b = MerkleTree(string.ascii_letters)
 
@@ -288,3 +274,31 @@ class MerkleTreeTestCase(unittest.TestCase):
     self.assertIsNot(a, b)
     self.assertFalse(a.__eq__(b))
     self.assertFalse(b.__eq__(a))
+
+  def test_verify_leaf_inclusion(self):
+    self.assertRaises(TypeError, verify_leaf_inclusion)
+    self.assertRaises(TypeError, verify_leaf_inclusion, None, None, hashfunc)
+
+    tree = MerkleTree(string.ascii_letters, hasher)
+    merkle_root = tree.merkle_root
+
+    for leaf in string.ascii_letters:
+      proof = tree.get_proof(leaf)
+      hashval = hasher.hash_leaf(leaf)
+
+      self.assertEqual(tree.get_proof(hashval), proof)
+      self.assertTrue(verify_leaf_inclusion(leaf, proof, hashfunc, merkle_root))
+
+  def test_verify_tree_consistency(self):
+    self.assertRaises(TypeError, verify_tree_consistency)
+    self.assertFalse(verify_tree_consistency(MerkleTree(), None, 10))
+
+    tree = MerkleTree(string.ascii_letters)
+    merkle_root = tree.merkle_root
+
+    self.assertTrue(verify_tree_consistency(tree, merkle_root, len(tree)))
+
+    for size in range(1, len(tree)):
+      old_tree = MerkleTree(string.ascii_letters[:size])
+      merkle_root = old_tree.merkle_root
+      self.assertTrue(verify_tree_consistency(tree, merkle_root, size))
