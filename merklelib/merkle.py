@@ -135,25 +135,25 @@ def verify_tree_consistency(new_tree, old_root, old_size):
   return new_root == old_root
 
 
-def verify_leaf_inclusion(target, proof, hasher, root):
-  if not isinstance(hasher, Hasher):
-    if not callable(hasher):
-      raise TypeError(f'Expected callable, got {type(hasher)}')
-    hasher = Hasher(hashfunc=hasher)
+def verify_leaf_inclusion(target, proof, hashobj, root):
+  if not isinstance(hashobj, Hasher):
+    if not callable(hashobj):
+      raise TypeError(f'Expected callable, got {type(hashobj)}')
+    hashobj = Hasher(hashobj)
 
+  hasher = hashobj
   paths = None
 
   if isinstance(proof, collections.Iterable):
     if isinstance(proof[0], AuditNode):
       paths = proof
-    elif utils.is_string(proof[0]):
-      paths = [utils.from_hex(p) for p in proof]
   elif isinstance(proof, AuditProof):
     paths = proof._nodes
+
   if paths is None:
     raise TypeError(
       'Proof must be either <AuditProof>, '
-      'a collection of <AuditNode> or hexadecimal strings.'
+      'a collection of <AuditNode> objects.'
       )
   # keep it dry
   concat = lambda x,y: _concat(hasher, x, y)
@@ -258,7 +258,7 @@ class AuditProof(object):
     return all([
       isinstance(other, AuditProof),
       len(self) == len(other),
-      sorted(self._nodes) == sorted(other._nodes)
+      set(self.hex_nodes) == set(other.hex_nodes)
     ])
 
   def __repr__(self):
@@ -271,9 +271,8 @@ class AuditProof(object):
 
 @functools.total_ordering
 class MerkleTree(object):
-  def __init__(self, leaves, hashobj=None):
-    if not leaves:
-      raise ValueError('Invalid leaves param')
+  def __init__(self, leaves=None, hashobj=None):
+    leaves = leaves or []
     self._init_hashfunc(hashobj)
     self._build_tree(leaves)
 
@@ -289,7 +288,8 @@ class MerkleTree(object):
   def _build_tree(self, leaves):
     if not isinstance(leaves, collections.Iterable):
       leaves = (leaves, )
-    self._mapping = self._root = None
+    self._root = None
+    mapping = collections.OrderedDict()
     hasher = self._hasher
     nodes = [MerkleNode(hasher.hash_leaf(leaf)) for leaf in leaves]
     leaves = list(nodes)
@@ -298,11 +298,10 @@ class MerkleTree(object):
         nodes.append(_empty)
       nodes = [MerkleNode.combine(hasher, l, r) for l, r in _pairwise(nodes)]
     if len(leaves) > 0:
-      mapping = collections.OrderedDict()
       for leaf in leaves:
         mapping[leaf.hash] = leaf
-      self._mapping = mapping
       self._set_root(nodes[0])
+    self._mapping = mapping
 
   def get_proof(self, leaf):
     mapping, hasher = self._mapping, self._hasher
@@ -345,17 +344,26 @@ class MerkleTree(object):
     leaf.hash = utils.from_hex(new)
     self._rehash(leaf)
 
-  def _append(self, item):
+  def append(self, item):
     mapping, hasher, leaves, root = (
       self._mapping,
       self._hasher,
       self.leaves,
       self._root
     )
+
+    # build first merkle root
+    if len(leaves) == 0:
+      root = MerkleNode(hasher.hash_leaf(item))
+      mapping[root.hash] = root
+      self._set_root(root)
+      return
+
     last = leaves[-1]
     new_hash = hasher.hash_leaf(item)
     node = mapping[new_hash] = MerkleNode(new_hash)
 
+    # only one leaf is present
     if last is root:
       root = MerkleNode.combine(hasher, root, node)
       self._set_root(root)
@@ -364,16 +372,19 @@ class MerkleTree(object):
     sibiling = last.sibiling
     connector = last.parent
 
+    # replace _empty with a real node
     if sibiling is _empty:
       node.parent = connector
       connector.right = node
       self._rehash(node)
       return
 
+    # build up a subtree until we find a node to which we can connect
     node.right = _empty
     while connector is not root:
       node = MerkleNode.combine(hasher, node, _empty)
       sibiling = connector.sibiling
+      # we've found the node to which we can hook up the new subtree
       if sibiling is _empty:
         connector.parent.right = node
         node.parent = connector.parent
@@ -388,17 +399,13 @@ class MerkleTree(object):
     self._root = new_root
     self.last_changed = time.time()
 
-  def append(self, item):
-    leaves = item
-    if isinstance(item, MerkleTree):
-      leaves = item.leaves
-    elif utils.is_string(item):
-      leaves = (item, )
-    elif not isinstance(item, collections.Iterable):
-      leaves = (item, )
-
-    for leaf in leaves:
-      self._append(leaf)
+  def extend(self, data):
+    if isinstance(data, MerkleTree):
+      data = data.leaves
+    elif not isinstance(data, collections.Iterable):
+      data = (data, data)
+    for item in data:
+      self.append(item)
 
   @property
   def leaves(self):
@@ -435,6 +442,10 @@ class MerkleTree(object):
       self._hasher,
       self.merkle_root
     )
+
+  def clear(self):
+    self._root = None
+    self._mapping.clear()
 
   def __len__(self):
     return len(self._mapping)
