@@ -157,7 +157,6 @@ class MerkleTreeTestCase(unittest.TestCase):
 
     # testing _init_hashfunc
     self.assertRaises(TypeError, MerkleTree, leaves, leaves)
-    self.assertRaises(ValueError, MerkleTree, None)
 
     tree = MerkleTree('a', mirror)
     self.assertEqual(tree.hasher.hashfunc.__wrapped__, mirror)
@@ -176,14 +175,116 @@ class MerkleTreeTestCase(unittest.TestCase):
     self.assertEqual(tree.hexleaves, [hasher.hash_leaf('a')])
     self.assertEqual(tree.merkle_root, hasher.hash_leaf('a'))
 
+    # test case for empty root
+    tree = MerkleTree()
+    self.assertEqual(tree.hexleaves, [])
+    self.assertEqual(tree.merkle_root, None)
+
   @mock.patch('merklelib.utils.to_hex', autospec=True)
   def test_merkle_tree_get_proof(self, to_hex_mock):
     to_hex_mock.side_effect = mirror
+    hasher = Hasher(hashfunc)
+    chars = list('abcdefgh')
 
-    chars = list(string.ascii_letters)
-    tree = MerkleTree(chars, hashfunc)
+    tree = MerkleTree(chars, hasher)
 
     self.assertEqual(tree.get_proof('invalid'), AuditProof([]))
+
+    # proof should contain log2 (n) of nodes
     for char in chars:
+      expected = math.ceil(math.log(len(chars), 2))
+      # check for simple chars
       proof = tree.get_proof(char)
-      self.assertEqual(len(proof), math.ceil(math.log(len(chars), 2)))
+      self.assertEqual(len(proof), expected)
+      # check for hashed leaves
+      proof = tree.get_proof(hasher.hash_leaf(char))
+      self.assertEqual(len(proof), expected)
+
+  @mock.patch('merklelib.utils.to_hex', autospec=True)
+  def test_merkle_tree_update(self, to_hex_mock):
+    to_hex_mock.side_effect = mirror
+    hasher = Hasher(hashfunc)
+    chars = string.ascii_letters
+    hash_mapping = { char: hasher.hash_leaf(char) for char in chars }
+
+    tree = MerkleTree(chars, hasher)
+    initial_merkle_root = tree.merkle_root
+    # calculate the merkle root manually from hashes
+    current_root = _calculate_root(
+      hasher.hash_children,
+      hash_mapping.values()
+    )
+
+    self.assertEqual(initial_merkle_root, current_root)
+    self.assertRaises(KeyError, tree.update, 'invalid', 'a')
+
+    for a, b in zip(chars, chars[::-1]):
+      prev_merkle_root = current_root
+      hash_mapping[a] = hasher.hash_leaf(b)
+
+      # swap values
+      tree.update(a, b)
+
+      # calculate the merkle root manually from hashes
+      current_root = _calculate_root(
+        hasher.hash_children,
+        hash_mapping.values()
+      )
+
+      self.assertNotEqual(tree.merkle_root, initial_merkle_root)
+      self.assertNotEqual(tree.merkle_root, prev_merkle_root)
+      self.assertEqual(tree.merkle_root, current_root)
+
+      # same thing for hash values for leaves
+      tree.update(hasher.hash_leaf(a), hasher.hash_leaf(b))
+
+      self.assertNotEqual(tree.merkle_root, initial_merkle_root)
+      self.assertNotEqual(tree.merkle_root, prev_merkle_root)
+      self.assertEqual(tree.merkle_root, current_root)
+
+  @mock.patch('merklelib.utils.to_hex', autospec=True)
+  def test_merkle_tree_append(self, to_hex_mock):
+    to_hex_mock.side_effect = mirror
+
+    hasher = Hasher(hashfunc)
+    ascii = string.ascii_letters
+    hashes = [hasher.hash_leaf(char) for char in ascii]
+
+    tree = MerkleTree(hashobj=hasher)
+
+    # hash as one string
+    tree.append(ascii)
+    expected_hash = hasher.hash_leaf(ascii)
+
+    self.assertEqual(len(tree), 1)
+    self.assertEqual(tree.merkle_root, expected_hash)
+
+    # append every ascii character
+    tree.clear(); tree.extend(ascii)
+    expected_hash = _calculate_root(hasher.hash_children, hashes)
+
+    self.assertEqual(len(tree), len(ascii))
+    self.assertEqual(tree.merkle_root, expected_hash)
+
+    # test all cases
+    for limit in range(1, len(ascii)):
+      tree.clear(); tree.extend(ascii[:limit])
+      expected_hash = _calculate_root(hasher.hash_children, hashes[:limit])
+
+      self.assertEqual(len(tree), limit)
+      self.assertEqual(tree.merkle_root, expected_hash)
+
+  def test_merkle_tree_equals(self):
+
+    a = MerkleTree(string.ascii_letters)
+    b = MerkleTree(string.ascii_letters)
+
+    self.assertEqual(a, b)
+    self.assertTrue(a.__eq__(b))
+    self.assertTrue(b.__eq__(a))
+
+    a.append(1); b.append(2);
+
+    self.assertIsNot(a, b)
+    self.assertFalse(a.__eq__(b))
+    self.assertFalse(b.__eq__(a))
