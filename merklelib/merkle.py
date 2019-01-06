@@ -1,4 +1,6 @@
 # -*- coding: future_fstrings -*-
+# -*- coding: utf-8 -*-
+from __future__ import unicode_literals
 from __future__ import print_function
 from __future__ import with_statement
 
@@ -36,7 +38,7 @@ def _hash_from_hex(func):
 
 
 class Hasher(object):
-  def __init__(self, hashfunc):
+  def __init__(self, hashfunc=_default_hash):
     if not callable(hashfunc):
       raise TypeError(f'Expected callable, got {type(hashfunc)}')
     self.hashfunc = hashfunc
@@ -58,7 +60,9 @@ class Hasher(object):
     self._hashfunc = _hash_from_hex(hashfunc)
 
   def __repr__(self):
-    return f'{self.__class__.__name__}({self._hashfunc})'
+    classname = self.__class__.__name__
+    hashfunc = self._hashfunc.__wrapped__
+    return f'{classname}({hashfunc})'
 
   def __str__(self):
     return repr(self)
@@ -179,7 +183,8 @@ class _BaseNode(object):
   def __eq__(self, other):
     return all([
       isinstance(other, _BaseNode),
-      self.hash == other.hash
+      self.hash == other.hash,
+      self.type == other.type
     ])
 
   def __repr__(self):
@@ -246,9 +251,19 @@ class AuditProof(object):
       ]
     return self._hex_nodes
 
+  def __len__(self):
+    return len(self._nodes)
+
+  def __eq__(self, other):
+    return all([
+      isinstance(other, AuditProof),
+      len(self) == len(other),
+      sorted(self._nodes) == sorted(other._nodes)
+    ])
+
   def __repr__(self):
     items = ', '.join(self.hex_nodes)
-    return f'{{ items }}'
+    return f'{{{items}}}'
 
   def __str(self):
     return repr(self)
@@ -256,20 +271,24 @@ class AuditProof(object):
 
 @functools.total_ordering
 class MerkleTree(object):
-  def __init__(self, leaves, hashfunc=None):
+  def __init__(self, leaves, hashobj=None):
     if not leaves:
       raise ValueError('Invalid leaves param')
-    self._init_hashfunc(hashfunc)
+    self._init_hashfunc(hashobj)
     self._build_tree(leaves)
 
-  def _init_hashfunc(self, hashfunc):
-    if hashfunc is None:
-      hashfunc = _default_hash
-    elif not callable(hashfunc):
-      raise TypeError('hash must be a callable')
-    self._hasher = Hasher(hashfunc)
+  def _init_hashfunc(self, hashobj):
+    if hashobj is None:
+      hashobj = Hasher(_default_hash)
+    elif callable(hashobj):
+      hashobj = Hasher(hashfunc=hashobj)
+    if not isinstance(hashobj, Hasher):
+      raise TypeError('hashobj must be a function or Hasher')
+    self._hasher = hashobj
 
   def _build_tree(self, leaves):
+    if not isinstance(leaves, collections.Iterable):
+      leaves = (leaves, )
     self._mapping = self._root = None
     hasher = self._hasher
     nodes = [MerkleNode(hasher.hash_leaf(leaf)) for leaf in leaves]
@@ -384,6 +403,11 @@ class MerkleTree(object):
   @property
   def leaves(self):
     return list(self._mapping.values())
+
+  @property
+  def hexleaves(self):
+    convert = lambda n: utils.to_hex(n.hash)
+    return list(map(convert, self._mapping.values()))
 
   @property
   def merkle_root(self):

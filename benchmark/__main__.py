@@ -33,7 +33,7 @@ def getsize(obj_0):
     if isinstance(obj, zero_depth_bases):
       pass # bypass remaining control flow and return
     elif isinstance(obj, (tuple, list, Set, deque)):
-      size += sum(inner(i) for i in obj)
+      size += sum(sys.getsizeof(i) for i in obj)
     elif isinstance(obj, Mapping) or hasattr(obj, iteritems):
       size += sum(inner(k) + inner(v) for k, v in getattr(obj, iteritems)())
     # Check for custom object instances - may subclass above too
@@ -62,14 +62,14 @@ def main():
     '-s', '--size',
     help='Initial number of leaves',
     dest='size',
-    default=2 ** 16
+    default=2 ** 8
   )
 
   parser.add_argument(
     '-a', '--additional',
     help='Number of leaves that we need to append',
     dest='additional',
-    default=2 ** 0
+    default=2 ** 1
   )
 
   parser.add_argument(
