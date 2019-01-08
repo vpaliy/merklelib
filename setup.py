@@ -11,7 +11,7 @@ from setuptools import setup, find_packages, Command
 here = os.path.abspath(os.path.dirname(__file__))
 
 
-name = 'merkle-trees'
+name = 'merklelib'
 description = 'Merkle tree and its variations for easier data verification.'
 url = 'https://github.com/vpaliy/merkle-trees'
 email = 'vpaliy97@gmail.com'
