@@ -1,6 +1,4 @@
-# merklelib
-
-## Theory
+# Merkle Trees
 
 Merkle trees are hash-based data structures used to validate large amounts of data in an efficient manner. This data structure is used to solve the previously time-consuming and computationally expensive problem of keeping data consistent across multiple computers. Prominent uses of a Merkle tree - and its variations- are in peer-to-peer networks such as Bitcoin, Ethereum, Git, and Tor.
 
@@ -45,7 +43,13 @@ Install it:
 
 `pip install merklelib`
 
-For instance, this snippet demonstrates how to build a Merkle tree and verify leaf inclusion:
+or clone it:
+
+```
+$ git clone git clone https://github.com/vpaliy/merklelib.git
+```
+
+This snippet demonstrates how to build a Merkle tree and verify leaf inclusion:
 
 ```python
 import string
@@ -69,7 +73,9 @@ tree = MerkleTree(data, hashfunc)
 proof = tree.get_proof(hashfunc('A'))
 
 # now verify that A is in the tree
-if tree.verify_leaf_inclusion(proof):
+# you can also pass in the hash value of 'A'
+# it will hash automatically if the user forgot to hash it
+if tree.verify_leaf_inclusion('A', proof):
   print('A is in the tree')
 else:
   exit('A is not in the tree')
@@ -243,7 +249,7 @@ You can also build your own benchmark. Here's a simple one that measure how long
 ```
 MIT License
 
-Copyright (c) 2018 Vasyl Paliy
+Copyright (c) 2019 Vasyl Paliy
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
