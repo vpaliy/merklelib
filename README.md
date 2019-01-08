@@ -2,7 +2,7 @@
 
 ## Theory
 
-Merkle trees are hash-based data structures used to validate large amounts of data in an efficient manner. This data structure is used to solve the previously time-consuming and computationaly expensive problem of keeping data consistent across multiple computers. Prominent uses of a Merkle tree - and its variations- are in peer-to-peer networks such as Bitcoin, Ethereum, Git, and Tor.
+Merkle trees are hash-based data structures used to validate large amounts of data in an efficient manner. This data structure is used to solve the previously time-consuming and computationally expensive problem of keeping data consistent across multiple computers. Prominent uses of a Merkle tree - and its variations- are in peer-to-peer networks such as Bitcoin, Ethereum, Git, and Tor.
 
 
 ### Merkle Tree Diagram
@@ -12,12 +12,12 @@ This diagram illustrates a fully balanced Merkle tree. As you can guess from the
 <img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/merkle.jpg"  />
 
 
-This is what an "artificially" balanced tree looks like (a tree whose number of leaves is not power of two):
+This is what an "artificially" balanced tree looks like (a tree whose number of leaves is not a power of two):
 
 <img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/empty.jpg"  />
 
 We had to add an empty light-weight node in order to keep it balanced.
-Therefore, when we append a new leaf, we can just replace that empty node and recalculate the hash root; time complexity is `O(log(n))`.
+Therefore, when we append a new leaf, we can just replace that empty node and recalculate the hash root.
 
 
 ### Merkle Audit Proof
@@ -29,8 +29,8 @@ The diagram below illustrates how you should construct an audit proof:
 <img src="https://github.com/vpaliy/merkle-trees/blob/master/ext/proof.jpg"  />
 
 In this example, we need to provide a proof that the record `D` exists in the database.
-Since we already know the hash value of `D` (we can easily compute it), we will need `H-3` in order to compute `D-2`. Now, when we are able to compute `D-2`, we will need to get `D-1` in order to obtain the hash value of `T-1`, and so on..
-You've got the gist, right? We only need to grab the sibiling node and climb up the tree until we've reached the root. (This)[https://github.com/vpaliy/merklelib/blob/master/merklelib/merkle.py#L468] implements everything described above.
+Since we already know the hash value of `D` (we can easily compute it), we will need `H-3` in order to compute `D-2`. Now, when we are able to compute `D-2`, we will need to get `D-1` in order to obtain the hash value of `T-1`, and so on...
+You've got the gist, right? We only need to grab the sibling node and climb up the tree until we've reached the root. [This](https://github.com/vpaliy/merklelib/blob/master/merklelib/merkle.py#L468) implements everything described above.
 
 
 ### Merkle Consistency Proof
@@ -76,6 +76,7 @@ else:
 ```
 
 Or you may want to perform a consitency check (using `<`, `<=`, `>`, `>=` operators):
+
 (some code will be omitted)
 ```python
 tree = MerkleTree(get_data())
@@ -232,11 +233,11 @@ You can also build your own benchmark. Here's a simple one that measure how long
 
 # Resources
 
-* (Understanding Merkle Trees - Why use them, who uses them, and how to use them)[https://www.codeproject.com/Articles/1176140/%2FArticles%2F1176140%2FUnderstanding-Merkle-Trees-Why-use-them-who-uses-t]
+* [Understanding Merkle Trees - Why use them, who uses them, and how to use them](https://www.codeproject.com/Articles/1176140/%2FArticles%2F1176140%2FUnderstanding-Merkle-Trees-Why-use-them-who-uses-t)
 
-* (Certificate Transparency)[https://tools.ietf.org/html/rfc6962#section-2.1.2]
+* [Certificate Transparency](https://tools.ietf.org/html/rfc6962#section-2.1.2)
 
-* (Merkle Tree Brilliant)[https://brilliant.org/wiki/merkle-tree/]
+* [Merkle Tree Brilliant](https://brilliant.org/wiki/merkle-tree/)
 
 # License
 ```
