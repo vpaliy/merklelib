@@ -1,3 +1,7 @@
+[![Build Status](https://travis-ci.org/vpaliy/merklelib.svg?branch=master)](https://travis-ci.org/vpaliy/merklelib)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/vpaliy/merklelib/branch/master/graph/badge.svg)](https://codecov.io/gh/vpaliy/merklelib)
+
 # Merkle Trees
 
 Merkle trees are hash-based data structures used to validate large amounts of data in an efficient manner. This data structure is used to solve the previously time-consuming and computationally expensive problem of keeping data consistent across multiple computers. Prominent uses of a Merkle tree - and its variations- are in peer-to-peer networks such as Bitcoin, Ethereum, Git, and Tor.
