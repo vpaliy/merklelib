@@ -456,7 +456,7 @@ class MerkleTree(object):
     """
     mapping, hasher = self._mapping, self._hasher
     # assuming that leaf in hexadecimal representation
-    target = mapping.get(utils.from_hex(leaf))
+    target = mapping.get(leaf)
     if target is None:
       target = mapping.get(hasher.hash_leaf(leaf))
     # no leaf in mapping, return an empty AuditProof object
