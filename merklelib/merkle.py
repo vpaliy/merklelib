@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 # -*- coding: utf-8 -*-
 
 """Merkle trees.
@@ -98,11 +97,15 @@ class Hasher(object):
     self.hashfunc = hashfunc
 
   def hash_leaf(self, data):
-    data = b'\x00' + utils.to_string(data)
+    data =  utils.to_string(data)
     return self._hashfunc(data)
 
   def hash_children(self, left, right):
-    data = b'\x01' + left + right
+    data =  left + right
+    if(left < right):
+      data = left + right
+    else:
+      data = right + left
     return self._hashfunc(data)
 
   @property
@@ -432,6 +435,7 @@ class MerkleTree(object):
     mapping = collections.OrderedDict()
     hasher = self._hasher
     nodes = [MerkleNode(hasher.hash_leaf(item)) for item in data]
+    nodes.sort(key = lambda leaf: leaf.hash)
     leaves = list(nodes)
     # build the tree and compute the merkle hash root
     while len(nodes) > 1:
