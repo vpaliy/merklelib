@@ -39,7 +39,6 @@ import collections
 import abc
 import six
 import functools
-import io
 import math
 import time
 
