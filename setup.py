@@ -22,7 +22,7 @@ version = None
 
 
 with io.open(os.path.join(here, 'merklelib', '__init__.py'), encoding='utf-8') as fp:
-  version = re.compile(r".*__version__ = '(.*?)'", re.S).match(fp.read()).group(1)
+  version = re.compile(r".*__version__ = \"(.*?)\"", re.S).match(fp.read()).group(1)
 
 try:
   with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
