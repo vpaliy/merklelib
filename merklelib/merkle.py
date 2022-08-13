@@ -44,6 +44,11 @@ import time
 
 from merklelib import utils
 
+try:
+    collectionsAbc = collections.abc
+except AttributeError:
+    collectionsAbc = collections
+
 # used to indicate whether a leaf (or node) is the left or right child
 # or unknown yet
 LEFT, RIGHT, UNKNOWN = tuple(range(3))
@@ -251,7 +256,7 @@ def verify_leaf_inclusion(target, proof, hashobj, root_hash):
   paths = None
 
   # any collection containing AuditNode objects.
-  if isinstance(proof, collections.Iterable):
+  if isinstance(proof, collectionsAbc.Iterable):
     if isinstance(proof[0], AuditNode):
       paths = proof
   elif isinstance(proof, AuditProof):
@@ -429,10 +434,10 @@ class MerkleTree(object):
 
   def _build_tree(self, data):
     # convert to a tuple if not iterable already
-    if not isinstance(data, collections.Iterable):
+    if not isinstance(data, collectionsAbc.Iterable):
       data = (data, )
     self._root = None
-    mapping = collections.OrderedDict()
+    mapping = collectionsAbc.OrderedDict()
     hasher = self._hasher
     nodes = [MerkleNode(hasher.hash_leaf(item)) for item in data]
     nodes.sort(key = lambda leaf: leaf.hash)
@@ -575,7 +580,7 @@ class MerkleTree(object):
     """
     if isinstance(data, MerkleTree):
       data = data.leaves
-    elif not isinstance(data, collections.Iterable):
+    elif not isinstance(data, collectionsAbc.Iterable):
       data = (data, data)
     # traverse and append each item
     for item in data:
